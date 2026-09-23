@@ -22,11 +22,13 @@ class Cart {
     Discount? receiptDiscount,
     int? taxPercent,
     String? customerId,
+    bool clearCustomer = false,
   }) =>
       Cart(
         items: items ?? this.items,
         receiptDiscount: receiptDiscount ?? this.receiptDiscount,
         taxPercent: taxPercent ?? this.taxPercent,
-        customerId: customerId ?? this.customerId,
+        customerId:
+            clearCustomer ? null : (customerId ?? this.customerId),
       );
 }

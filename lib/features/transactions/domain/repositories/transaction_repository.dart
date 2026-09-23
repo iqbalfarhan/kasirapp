@@ -15,10 +15,9 @@ class VoidTransactionParams {
 
 abstract class TransactionRepository {
   Future<Result<List<Transaction>>> getTransactions(
-      {required DateTime start, required DateTime end});
+      {required DateTime start, required DateTime end, String? query});
   Future<Result<Transaction>> getDetail(String id);
 
   /// Soft-void: set status batal + audit. Kembalikan stok barang (jasa tidak).
-  /// TODO Fase 3: implementasi Drift dalam 1 transaksi DB.
   Future<Result<void>> voidTransaction(VoidTransactionParams params);
 }

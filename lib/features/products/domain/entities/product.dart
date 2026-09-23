@@ -22,4 +22,30 @@ class Product {
   final bool isActive;
 
   bool get isService => !trackStock;
+
+  static const String defaultCategory = 'Lainnya';
+
+  /// Kategori kosong/blank dinormalisasi ke "Lainnya".
+  String get effectiveCategory =>
+      category.trim().isEmpty ? defaultCategory : category.trim();
+
+  Product copyWith({
+    String? name,
+    String? category,
+    int? price,
+    int? stock,
+    bool? trackStock,
+    String? imagePath,
+    bool? isActive,
+  }) =>
+      Product(
+        id: id,
+        name: name ?? this.name,
+        category: category ?? this.category,
+        price: price ?? this.price,
+        stock: stock ?? this.stock,
+        trackStock: trackStock ?? this.trackStock,
+        imagePath: imagePath ?? this.imagePath,
+        isActive: isActive ?? this.isActive,
+      );
 }

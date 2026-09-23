@@ -1,58 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kasirapp/core/money.dart';
 import 'package:kasirapp/core/responsive.dart';
+import 'package:kasirapp/features/pos/presentation/providers/cart_providers.dart';
+import 'package:kasirapp/features/pos/presentation/widgets/cart_panel.dart';
+import 'package:kasirapp/features/pos/presentation/widgets/menu_grid.dart';
+import 'package:kasirapp/features/settings/presentation/providers/auth_providers.dart';
 
-/// Placeholder layar POS. UI penuh (grid + cart split) dibangun di Fase 2.
-/// Responsive: HP = kolom tunggal, tablet = 2 panel.
-class PosScreen extends StatelessWidget {
+/// Layar kasir: grid menu + keranjang.
+/// HP: menu penuh + bar bawah buka keranjang. Tablet: split 3:2.
+class PosScreen extends ConsumerWidget {
   const PosScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Pajak live dari settings (snapshot saat checkout via cart).
+    ref.listen(settingsProvider, (_, next) {
+      next.whenData((s) {
+        if (ref.read(cartProvider).taxPercent != s.taxPercent) {
+          ref.read(cartProvider.notifier).setTaxPercent(s.taxPercent);
+        }
+      });
+    });
+
     if (isTablet(context)) {
       return const Row(
         children: [
-          Expanded(flex: 3, child: _MenuGrid()),
+          Expanded(flex: 3, child: MenuGrid()),
           VerticalDivider(width: 1),
-          Expanded(flex: 2, child: _CartPanel()),
+          Expanded(flex: 2, child: CartPanel()),
         ],
       );
     }
-    return const Column(
-      children: [
-        Expanded(child: _MenuGrid()),
-        _CartSummaryBar(),
-      ],
-    );
-  }
-}
 
-class _MenuGrid extends StatelessWidget {
-  const _MenuGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Grid menu (Fase 1-2)'));
-  }
-}
-
-class _CartPanel extends StatelessWidget {
-  const _CartPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Keranjang (Fase 2)'));
-  }
-}
-
-class _CartSummaryBar extends StatelessWidget {
-  const _CartSummaryBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SafeArea(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('Ringkasan keranjang (Fase 2)'),
+    final totals = ref.watch(cartTotalsProvider);
+    final count =
+        ref.watch(cartProvider.select((c) => c.items.length));
+    return Scaffold(
+      body: const MenuGrid(),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: ElevatedButton(
+            onPressed: () => showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.9,
+                builder: (_, _) => CartPanel(
+                  onCheckoutDone: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+            child: Text(
+              count == 0
+                  ? 'Keranjang kosong'
+                  : 'Keranjang ($count) • ${formatRp(totals.total)}',
+            ),
+          ),
+        ),
       ),
     );
   }

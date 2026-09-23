@@ -10,16 +10,16 @@ class GetReportParams {
   final DateTime end;
 }
 
-class GetReport implements UseCase<ReportSummary, GetReportParams> {
+class GetReport implements UseCase<ReportData, GetReportParams> {
   const GetReport(this._repository);
   final ReportRepository _repository;
 
   @override
-  Future<Result<ReportSummary>> call(GetReportParams params) {
+  Future<Result<ReportData>> call(GetReportParams params) {
     if (params.end.isBefore(params.start)) {
-      return Future.value(const FailureResult<ReportSummary>(
+      return Future.value(const FailureResult<ReportData>(
           ValidationFailure('Tanggal akhir < tanggal awal')));
     }
-    return _repository.getSummary(start: params.start, end: params.end);
+    return _repository.getReport(start: params.start, end: params.end);
   }
 }

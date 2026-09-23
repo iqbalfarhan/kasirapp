@@ -8,12 +8,16 @@ class LoginWithPin implements UseCase<AppUser, String> {
   const LoginWithPin(this._repository);
   final UserRepository _repository;
 
+  static final _pinPattern = RegExp(r'^[0-9]{4,6}$');
+
   @override
   Future<Result<AppUser>> call(String params) {
-    if (params.trim().isEmpty) {
-      return Future.value(
-          const FailureResult<AppUser>(ValidationFailure('PIN wajib diisi')));
+    if (!_pinPattern.hasMatch(params.trim())) {
+      return Future.value(const FailureResult<AppUser>(
+          ValidationFailure('PIN harus 4-6 digit angka')));
     }
-    return _repository.loginWithPin(params);
+    // Lockout 5x salah → 5 menit dicek di repository/data (Fase 1, butuh
+    // failed_attempts/locked_until dari DB); domain hanya validasi format.
+    return _repository.loginWithPin(params.trim());
   }
 }

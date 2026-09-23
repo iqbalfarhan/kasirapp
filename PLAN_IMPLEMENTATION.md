@@ -9,15 +9,15 @@
 | Toko | 1 toko, 1 device, tanpa sync/cloud |
 | Storage | Lokal saja: `drift` + `sqlite3_flutter_libs` |
 | Mata uang | Selalu IDR (`Rp 15.000`, tanpa desimal) |
-| Pajak | Persen adjustable di Settings, default 10%, dihitung setelah diskon, **snapshot per struk** (transaksi lama tidak berubah) |
+| Pajak | Persen adjustable di Settings, **range 0–100%**, default 10%, dihitung setelah diskon, **snapshot per struk** (transaksi lama tidak berubah) |
 | Stok | Barang lacak stok, **jasa (`track_stock=0`) bebas stok** — tidak dikurangi & tidak diblokir |
 | Non-tunai | QRIS/transfer **wajib uang pas** (`bayar == total`, kembalian 0) |
 | Diskon | Ganda: per-item (%/Rp) + per-struk (%/Rp), **dibatasi `max_discount_percent`** (atur admin, default 20%, 0 = tanpa batas) |
 | Void | Hanya admin + **wajib alasan**, simpan `void_reason/void_by/void_at` sebagai audit |
 | Struk | PDF dulu (share/print via OS), tanpa thermal/Bluetooth di MVP |
 | Client | Master Pelanggan terpisah + Riwayat Transaksi terpisah |
-| User | Multi-user PIN: `admin` & `kasir` |
-| Navigasi | HP: BottomNav 4 tab • Tablet ≥600dp: NavigationRail + 2-panel |
+| User | Multi-user PIN: `admin` & `kasir`. PIN 4–6 digit angka, simpan hash (SHA-256+salt), lockout 5x salah → kunci 5 menit |
+| Navigasi | HP: BottomNav 3 tab (Kasir, Riwayat, Setting) • Tablet ≥600dp: NavigationRail 3 item + 2-panel. Menu, Pelanggan, Laporan, Users, Backup di-stack dalam hub Setting |
 | State / Route | `flutter_riverpod` + `go_router` |
 | Laporan | Hari ini, Mingguan (Senin–Minggu), Bulanan, Tahunan, Custom range + grafik + export PDF/CSV |
 | Testing | Unit + Widget + Integration, target `flutter analyze` bersih |
@@ -52,7 +52,7 @@ Aturan tambahan:
 ```text
 products(id TEXT PK, nama TEXT, kategori TEXT, harga INTEGER, stok INTEGER, track_stock INTEGER [0|1, default 1], gambar_path TEXT?, is_active INTEGER, created_at INTEGER, updated_at INTEGER)
 customers(id TEXT PK, nama TEXT, hp TEXT?, alamat TEXT?, created_at INTEGER)
-users(id TEXT PK, nama TEXT, pin_hash TEXT, role TEXT [admin|kasir], is_active INTEGER)
+users(id TEXT PK, nama TEXT, pin_hash TEXT, pin_salt TEXT, role TEXT [admin|kasir], is_active INTEGER, must_change_pin INTEGER [0|1], failed_attempts INTEGER default 0, locked_until INTEGER?)
 settings(key TEXT PK, value TEXT)  // keys: store_name, tax_percent (default 10), max_discount_percent (default 20, 0=tanpa batas), store_address, store_phone
 transactions(id TEXT PK, customer_id TEXT? FK, kasir_id TEXT FK, subtotal INTEGER, diskon_item INTEGER, diskon_struk_tipe TEXT [none|percent|amount], diskon_struk_nilai INTEGER, pajak_persen INTEGER, pajak_nilai INTEGER, total INTEGER, bayar INTEGER, kembalian INTEGER, metode TEXT [tunai|qris|transfer], status TEXT [sukses|batal], void_reason TEXT?, void_by TEXT?, void_at INTEGER?, created_at INTEGER)
 transaction_items(id TEXT PK, transaction_id TEXT FK, product_id TEXT FK, nama_snapshot TEXT, harga_snapshot INTEGER, qty INTEGER, diskon_tipe TEXT, diskon_nilai INTEGER, subtotal INTEGER)
@@ -70,11 +70,11 @@ Migrasi: versioned (`schemaVersion = 1`), siapkan `migration_test` sejak awal.
 lib/
   main.dart                 // bootstrap + DI wiring + seed admin
   app.dart
-  router.dart               // GoRouter + guard role
+  router.dart               // GoRouter StatefulShellRoute 3 cabang (kasir/riwayat/setting) + sub-routes setting + guard role
   core/
     error/failures.dart     // Failure, ValidationFailure, NotFoundFailure, ...
     result/result.dart      // Result<T> Success/Failure wrapper
-    usecase/usecase.dart    // abstract UseCase<Type, Params> + NoParams
+    usecase/usecase.dart    // abstract UseCase<T, Params> + NoParams
     theme.dart
     responsive.dart
     money.dart              // formatRp(), parseRp()
@@ -84,7 +84,7 @@ lib/
     pos/
       domain/entities/ (cart.dart, cart_item.dart, discount.dart, checkout_result.dart)
       domain/repositories/pos_repository.dart      // interface
-      domain/usecases/ (calculate_total.dart, checkout.dart)
+      domain/usecases/ (calculate_total.dart, checkout.dart) // checkout bawa maxDiscountPercent, selaras dengan calculate
       data/models/ (cart_model.dart)
       data/datasources/ (pos_local_datasource.dart) // TODO drift Fase 2
       data/repositories/pos_repository_impl.dart
@@ -92,30 +92,30 @@ lib/
       presentation/widgets/ (cart_panel.dart, checkout_sheet.dart)
       presentation/providers/ (cart_provider.dart) // TODO riverpod Fase 2
     products/
-      domain/entities/product.dart
-      domain/repositories/product_repository.dart
-      domain/usecases/ (get_products.dart, save_product.dart, delete_product.dart)
+      domain/entities/product.dart // kategori kosong -> "Lainnya", jasa abaikan stok
+      domain/repositories/product_repository.dart // tanpa hapus permanen: get/save/toggleActive
+      domain/usecases/ (get_products.dart, save_product.dart, toggle_product_active.dart)
       data/... (mirror pos)
-      presentation/...
+      presentation/... // diakses via Setting hub (/setting/products)
     customers/
       domain/entities/customer.dart
       domain/repositories/customer_repository.dart
       domain/usecases/ (get_customers.dart, save_customer.dart)
-      data/...  presentation/...
-    transactions/           // riwayat + void + struk ulang
+      data/...  presentation/... // via /setting/customers
+    transactions/           // tab Riwayat + void + struk ulang
       domain/entities/transaction.dart (+ transaction_item.dart)
       domain/repositories/transaction_repository.dart
-      domain/usecases/ (get_transactions.dart, void_transaction.dart)
+      domain/usecases/ (get_transactions.dart, void_transaction.dart) // void: admin + alasan wajib
       data/...  presentation/screens/ (history_list, history_detail)
     reports/
       domain/entities/report_summary.dart
       domain/repositories/report_repository.dart
       domain/usecases/get_report.dart   // pakai core/period.dart
-      data/...  presentation/screens/report_screen.dart (+ chart widget)
-    settings/               // toko + pajak + users + backup
-      domain/entities/ (store_settings.dart, app_user.dart)
+      data/...  presentation/screens/report_screen.dart (+ chart widget) // via /setting/reports
+    settings/               // tab Setting (hub): store, tax, products, customers, reports, users, backup
+      domain/entities/ (store_settings.dart, app_user.dart) // app_user: failedAttempts/lockedUntil/mustChangePin
       domain/repositories/ (settings_repository.dart, user_repository.dart)
-      domain/usecases/ (get_settings.dart, save_tax.dart, login_with_pin.dart)
+      domain/usecases/ (get_settings.dart, save_tax.dart, login_with_pin.dart) // login: format 4-6 digit + cek lockout
       data/...  presentation/...
 test/
   unit/ (pos/calculate_total_test.dart, reports/period_test.dart, core/money_test.dart)
@@ -135,7 +135,8 @@ dependencies:
   flutter_riverpod: ^2.5.0
   go_router: ^14.0.0
   drift: ^2.20.0
-  sqlite3_flutter_libs: ^2.7.0
+  sqlite3_flutter_libs: ^0.6.0+eol  // resolved 0.6.0+eol (terbaru kompatibel, drift 2.35)
+  crypto: ^3.0.0  // hash PIN admin seed
   path_provider: ^2.1.0
   path: ^1.9.0
   intl: ^0.19.0
@@ -154,7 +155,7 @@ dev_dependencies:
 ## 5. Strategi Responsive
 
 * Helper `isTablet = shortestSide >= 600`.
-* HP: `BottomNavigationBar` (Kasir, Menu, Riwayat, Laporan), POS vertikal + keranjang sebagai `BottomSheet` + `DraggableScrollableSheet`.
+* HP: `BottomNavigationBar` 3 tab (Kasir, Riwayat, Setting); Menu/Pelanggan/Laporan/Users/Backup dibuka dari hub Setting (stack). POS vertikal + keranjang sebagai `BottomSheet` + `DraggableScrollableSheet`.
 * Tablet: `NavigationRail` kiri + POS split `Row(flex 3: grid menu, flex 2: cart sticky)`, tabel riwayat/laporan lebih lebar.
 * Grid menu: HP 2 kolom, tablet 3–4 kolom (`SliverGrid` + `LayoutBuilder`).
 * Semua tombol aksi kasir min 48dp, support rotasi + font besar (test `textScaleFactor 1.3`).
@@ -165,15 +166,15 @@ dev_dependencies:
 - [ ] Setup dependensi + `flutter pub get` + `build_runner` jalan
 - [ ] `core/theme.dart`, `responsive.dart`, `money.dart`, `period.dart` + domain POS `calculate_total.dart`
 - [ ] Drift DB + DAO + `settings` default (store_name, tax_percent=10, max_discount_percent=20)
-- [ ] `app.dart` + `router.dart` + 4 halaman placeholder
-- [ ] Seed admin default (PIN `1234`, wajib ganti saat pertama login)
+- [ ] `app.dart` + `router.dart` (StatefulShellRoute 3 cabang + sub-routes setting) + 3 halaman placeholder
+- [ ] Seed admin default (PIN `1234` di-hash + salt, flag `must_change_pin=1`)
 - **Acceptance:** app jalan HP+tablet, `flutter analyze` bersih, DB terbuat tanpa crash.
 
 ### FASE 1 — Master: Produk, Pelanggan, User (2–3 hari)
-- [ ] Produk CRUD: nama, kategori, harga, stok + flag jasa (`track_stock`), foto lokal (path), aktif/nonaktif, search + filter kategori
+- [ ] Produk: nama, kategori (kosong → "Lainnya"), harga, stok + flag jasa (`track_stock`), foto lokal (path), aktif/nonaktif, search + filter kategori. **Tanpa hapus permanen** — produk yang pernah terjual hanya boleh dinonaktifkan (tombol hapus disembunyikan/disable).
 - [ ] Stok stepper + validasi (harga > 0, stok ≥ 0, jasa bebas stok)
 - [ ] Pelanggan CRUD + pilih opsional di POS
-- [ ] User CRUD + login PIN + guard: kasir ❌ void/edit pajak/user
+- [ ] User CRUD + login PIN (hash, format 4–6 digit, lockout 5x → 5 menit, `must_change_pin`) + guard: kasir ❌ void/edit pajak/user
 - **Acceptance:** tambah 50 produk dummy scroll lancar, nonaktifkan produk hilang dari POS tapi tetap di laporan lama.
 
 ### FASE 2 — POS / Kasir (3–4 hari, inti)
@@ -199,7 +200,7 @@ dev_dependencies:
 ### FASE 5 — Struk PDF + Settings (1–2 hari)
 - [ ] `receipt_pdf.dart`: header toko, tabel item, rincian diskon/pajak/total/bayar/kembalian, footer terima kasih
 - [ ] Share + Print via `printing/share_plus`
-- [ ] Settings: nama/alamat toko, pajak adjustable (0–20%), ganti PIN, backup/restore file DB (copy sqlite)
+- [ ] Settings: nama/alamat toko, pajak adjustable (**0–100%**), max diskon, ganti PIN, backup/restore file DB (copy sqlite)
 - **Acceptance:** PDF terbuka di HP & tablet, nominal Rp benar, pajak tampil sesuai setting.
 
 ### FASE 6 — Hardening / Fulltest (2–3 hari)

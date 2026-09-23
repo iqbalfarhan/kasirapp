@@ -18,10 +18,13 @@ class SaveProduct implements UseCase<String, Product> {
       return Future.value(const FailureResult<String>(
           ValidationFailure('Harga harus > 0')));
     }
-    if (params.stock < 0) {
+    // Jasa (trackStock=false) bebas stok; barang tidak boleh negatif.
+    if (params.trackStock && params.stock < 0) {
       return Future.value(const FailureResult<String>(
           ValidationFailure('Stok tidak boleh negatif')));
     }
-    return _repository.saveProduct(params);
+    // Kategori kosong dinormalisasi ke "Lainnya" via entity.
+    final normalized = params.copyWith(category: params.effectiveCategory);
+    return _repository.saveProduct(normalized);
   }
 }

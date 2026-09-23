@@ -4,9 +4,12 @@ import 'package:kasirapp/features/transactions/domain/entities/transaction.dart'
 import 'package:kasirapp/features/transactions/domain/repositories/transaction_repository.dart';
 
 class GetTransactionsParams {
-  const GetTransactionsParams({required this.start, required this.end});
+  const GetTransactionsParams({required this.start, required this.end, this.query});
   final DateTime start;
   final DateTime end;
+
+  /// Cari ID transaksi / nama pelanggan (opsional).
+  final String? query;
 }
 
 class GetTransactions
@@ -16,5 +19,6 @@ class GetTransactions
 
   @override
   Future<Result<List<Transaction>>> call(GetTransactionsParams params) =>
-      _repository.getTransactions(start: params.start, end: params.end);
+      _repository.getTransactions(
+          start: params.start, end: params.end, query: params.query);
 }

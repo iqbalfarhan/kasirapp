@@ -23,6 +23,68 @@ class CalculateTotalParams {
   final int maxDiscountPercent;
 }
 
+/// Ringkasan angka keranjang TANPA validasi bayar — untuk preview live
+/// di UI. Satu-satunya komputasi (dipakai juga oleh [CalculateTotal]).
+class CartTotals {
+  const CartTotals({
+    required this.subtotalGross,
+    required this.itemDiscountTotal,
+    required this.subtotalAfterItemDiscount,
+    required this.receiptDiscount,
+    required this.subtotalAfterDiscount,
+    required this.tax,
+    required this.total,
+  });
+
+  final int subtotalGross;
+  final int itemDiscountTotal;
+  final int subtotalAfterItemDiscount;
+  final int receiptDiscount;
+  final int subtotalAfterDiscount;
+  final int tax;
+  final int total;
+}
+
+/// Komputasi murni & sinkron: diskon item → diskon struk → pajak → total.
+/// Semua clamp/limit ada di sini; [CalculateTotal] hanya menambah validasi.
+CartTotals summarizeCart(Cart cart) {
+  final subtotalGross =
+      cart.items.fold<int>(0, (sum, e) => sum + e.lineGross);
+  final itemDiscountTotal =
+      cart.items.fold<int>(0, (sum, e) => sum + e.lineDiscount);
+  final subtotalAfterItemDiscount = subtotalGross - itemDiscountTotal;
+
+  final receiptDiscount = _receiptDiscount(
+    cart.receiptDiscount,
+    subtotalAfterItemDiscount,
+  );
+  final subtotalAfterDiscount =
+      (subtotalAfterItemDiscount - receiptDiscount).clamp(0, 1 << 62);
+  final tax = (subtotalAfterDiscount * cart.taxPercent / 100).round();
+  return CartTotals(
+    subtotalGross: subtotalGross,
+    itemDiscountTotal: itemDiscountTotal,
+    subtotalAfterItemDiscount: subtotalAfterItemDiscount,
+    receiptDiscount: receiptDiscount,
+    subtotalAfterDiscount: subtotalAfterDiscount,
+    tax: tax,
+    total: subtotalAfterDiscount + tax,
+  );
+}
+
+int _receiptDiscount(Discount discount, int base) {
+  if (discount.isNone || base <= 0) return 0;
+  switch (discount.type) {
+    case DiscountType.none:
+      return 0;
+    case DiscountType.percent:
+      final pct = discount.value.clamp(0, 100);
+      return (base * pct / 100).round().clamp(0, base);
+    case DiscountType.amount:
+      return discount.value.clamp(0, base);
+  }
+}
+
 /// Usecase Full Clean — implementasi aturan hitung PLAN §1 + hasil review:
 /// diskon item -> diskon struk -> pajak (snapshot) -> total -> validasi bayar.
 /// Murni Dart, 100% unit-testable, tanpa Flutter/Drift.
@@ -66,53 +128,26 @@ class CalculateTotal implements UseCase<CheckoutResult, CalculateTotalParams> {
           ValidationFailure('Diskon struk melebihi batas $maxPct%'));
     }
 
-    final subtotalGross =
-        cart.items.fold<int>(0, (sum, e) => sum + e.lineGross);
-    final itemDiscountTotal =
-        cart.items.fold<int>(0, (sum, e) => sum + e.lineDiscount);
-    final subtotalAfterItemDiscount = subtotalGross - itemDiscountTotal;
+    final t = summarizeCart(cart);
 
-    final receiptDiscount = _receiptDiscount(
-      cart.receiptDiscount,
-      subtotalAfterItemDiscount,
-    );
-    final subtotalAfterDiscount =
-        (subtotalAfterItemDiscount - receiptDiscount).clamp(0, 1 << 62);
-    final tax =
-        (subtotalAfterDiscount * cart.taxPercent / 100).round();
-    final total = subtotalAfterDiscount + tax;
-
-    if (method != 'tunai' && payment != total) {
+    if (method != 'tunai' && payment != t.total) {
       return const FailureResult(
           ValidationFailure('Non-tunai wajib uang pas'));
     }
-    if (payment < total) {
+    if (payment < t.total) {
       return const FailureResult(ValidationFailure('Nominal bayar kurang'));
     }
 
     return Success(CheckoutResult(
-      subtotalGross: subtotalGross,
-      itemDiscountTotal: itemDiscountTotal,
-      subtotalAfterItemDiscount: subtotalAfterItemDiscount,
-      receiptDiscount: receiptDiscount,
-      subtotalAfterDiscount: subtotalAfterDiscount,
-      tax: tax,
-      total: total,
+      subtotalGross: t.subtotalGross,
+      itemDiscountTotal: t.itemDiscountTotal,
+      subtotalAfterItemDiscount: t.subtotalAfterItemDiscount,
+      receiptDiscount: t.receiptDiscount,
+      subtotalAfterDiscount: t.subtotalAfterDiscount,
+      tax: t.tax,
+      total: t.total,
       payment: payment,
-      change: payment - total,
+      change: payment - t.total,
     ));
-  }
-
-  int _receiptDiscount(Discount discount, int base) {
-    if (discount.isNone || base <= 0) return 0;
-    switch (discount.type) {
-      case DiscountType.none:
-        return 0;
-      case DiscountType.percent:
-        final pct = discount.value.clamp(0, 100);
-        return (base * pct / 100).round().clamp(0, base);
-      case DiscountType.amount:
-        return discount.value.clamp(0, base);
-    }
   }
 }

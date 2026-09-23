@@ -10,11 +10,16 @@ class CheckoutParams {
     required this.payment,
     required this.cashierId,
     required this.paymentMethod,
+    this.maxDiscountPercent = 20,
   });
   final Cart cart;
   final int payment;
   final String cashierId;
   final String paymentMethod;
+
+  /// Disalin dari StoreSettings live agar validasi diskon selaras
+  /// dengan CalculateTotal (0 = tanpa batas).
+  final int maxDiscountPercent;
 }
 
 /// Usecase checkout — validasi ringan di domain, commit di repository.
@@ -35,6 +40,7 @@ class Checkout implements UseCase<String, CheckoutParams> {
       payment: params.payment,
       cashierId: params.cashierId,
       paymentMethod: params.paymentMethod,
+      maxDiscountPercent: params.maxDiscountPercent,
     );
   }
 }

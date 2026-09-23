@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Lebar konten maksimum agar nyaman dibaca di tablet landscape.
+const double maxContentWidth = 720;
+
 /// Theme tunggal agar sentuhan kasir >= 48dp dan konsisten HP/tablet.
 ThemeData buildAppTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: Colors.teal);
