@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kasirapp/core/money.dart';
+import 'package:kasirapp/core/product_image.dart';
 import 'package:kasirapp/core/result/result.dart';
 import 'package:kasirapp/core/ui/snackbar.dart';
 import 'package:kasirapp/features/products/domain/entities/product.dart';
@@ -81,6 +82,8 @@ class ProductsScreen extends ConsumerWidget {
                     return Opacity(
                       opacity: p.isActive ? 1 : 0.5,
                       child: ListTile(
+                        leading: ProductImageThumb(
+                            path: p.imagePath, size: 48),
                         title: Text(p.name),
                         subtitle: Text(
                           '${p.effectiveCategory} • ${formatRp(p.price)} • '
@@ -137,9 +140,48 @@ Future<void> showProductForm(BuildContext context, WidgetRef ref,
       text: existing == null ? '' : existing.price.toString());
   final stock = TextEditingController(
       text: existing == null ? '' : existing.stock.toString());
-  final image = TextEditingController(text: existing?.imagePath ?? '');
+  var imagePath = existing?.imagePath;
+  var pickingImage = false;
   var trackStock = existing?.trackStock ?? true;
   var isActive = existing?.isActive ?? true;
+
+  Future<void> pickImage(
+      BuildContext ctx, void Function(void Function()) setState) async {
+    final source = await showModalBottomSheet<ProductImageSource>(
+      context: ctx,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () =>
+                  Navigator.pop(sheet, ProductImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Ambil dari Kamera'),
+              onTap: () =>
+                  Navigator.pop(sheet, ProductImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    setState(() => pickingImage = true);
+    try {
+      final stored = await pickAndStoreProductImage(source);
+      if (stored != null) {
+        setState(() => imagePath = stored);
+      }
+    } catch (e) {
+      if (ctx.mounted) showError(ctx, 'Gagal ambil gambar: $e');
+    } finally {
+      setState(() => pickingImage = false);
+    }
+  }
 
   return showDialog(
     context: context,
@@ -183,10 +225,43 @@ Future<void> showProductForm(BuildContext context, WidgetRef ref,
                       const InputDecoration(labelText: 'Stok'),
                   keyboardType: TextInputType.number,
                 ),
-              TextField(
-                controller: image,
-                decoration: const InputDecoration(
-                    labelText: 'Path gambar (opsional)'),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ProductImageThumb(path: imagePath, size: 72),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: pickingImage
+                              ? null
+                              : () => pickImage(ctx, setState),
+                          icon: pickingImage
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                )
+                              : const Icon(Icons.add_a_photo),
+                          label: Text(imagePath == null
+                              ? 'Tambah Foto'
+                              : 'Ganti Foto'),
+                        ),
+                        if (imagePath != null)
+                          TextButton.icon(
+                            onPressed: () =>
+                                setState(() => imagePath = null),
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Hapus foto'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               if (existing != null)
                 SwitchListTile(
@@ -214,9 +289,7 @@ Future<void> showProductForm(BuildContext context, WidgetRef ref,
                     ? int.tryParse(stock.text) ?? 0
                     : 0,
                 trackStock: trackStock,
-                imagePath: image.text.trim().isEmpty
-                    ? null
-                    : image.text.trim(),
+                imagePath: imagePath,
                 isActive: isActive,
               );
               final repo = ref.read(productRepositoryProvider);

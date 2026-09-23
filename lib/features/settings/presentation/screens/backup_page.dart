@@ -32,9 +32,11 @@ class _BackupPageState extends ConsumerState<BackupPage> {
         return;
       }
       final size = await file.length();
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/x-sqlite3')],
-        text: 'Backup Kasirapp (${(size / 1024).toStringAsFixed(1)} KB)',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/x-sqlite3')],
+          text: 'Backup Kasirapp (${(size / 1024).toStringAsFixed(1)} KB)',
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -45,12 +47,11 @@ class _BackupPageState extends ConsumerState<BackupPage> {
   }
 
   Future<void> _restore() async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['sqlite', 'db'],
-      withData: false,
     );
-    if (picked == null || picked.files.single.path == null) return;
+    if (picked == null || picked.path == null) return;
     if (!mounted) return;
 
     final confirm = await showDialog<bool>(
@@ -81,7 +82,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       await ref.read(databaseProvider).close();
       final target = await databaseFile();
       await _service.restoreDatabase(
-        source: File(picked.files.single.path!),
+        source: File(picked.path!),
         target: target,
       );
       if (!mounted) return;

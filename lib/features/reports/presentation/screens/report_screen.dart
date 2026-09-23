@@ -61,16 +61,18 @@ class ReportScreen extends ConsumerWidget {
           showError(context, txResult.failure.message);
         case Success():
           final csv = buildTransactionsCsv(txResult.data);
-          await Share.shareXFiles(
-            [
-              XFile.fromData(
-                utf8.encode(csv),
-                name:
-                    'laporan-${DateFormat('yyyyMMdd').format(data.start)}.csv',
-                mimeType: 'text/csv',
-              ),
-            ],
-            text: 'Export laporan Kasirapp',
+          await SharePlus.instance.share(
+            ShareParams(
+              files: [
+                XFile.fromData(
+                  utf8.encode(csv),
+                  name:
+                      'laporan-${DateFormat('yyyyMMdd').format(data.start)}.csv',
+                  mimeType: 'text/csv',
+                ),
+              ],
+              text: 'Export laporan Kasirapp',
+            ),
           );
       }
     }

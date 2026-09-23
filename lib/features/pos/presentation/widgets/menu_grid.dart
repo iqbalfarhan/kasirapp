@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kasirapp/core/money.dart';
+import 'package:kasirapp/core/product_image.dart';
 import 'package:kasirapp/core/ui/snackbar.dart';
 import 'package:kasirapp/features/pos/presentation/providers/cart_providers.dart';
 import 'package:kasirapp/features/products/presentation/providers/product_providers.dart';
@@ -50,12 +51,12 @@ class MenuGrid extends ConsumerWidget {
                   final cols = w < 400 ? 2 : (w < 700 ? 3 : 4);
                   return GridView.builder(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    gridDelegate:
+                      gridDelegate:
                         SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: cols,
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 8,
-                      childAspectRatio: 0.8,
+                      childAspectRatio: 0.62,
                     ),
                     itemCount: items.length,
                     itemBuilder: (context, i) {
@@ -85,6 +86,14 @@ class MenuGrid extends ConsumerWidget {
                                     CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  Center(
+                                    child: ProductImageThumb(
+                                      path: p.imagePath,
+                                      size: 56,
+                                      borderRadius: 10,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
                                   Text(
                                     p.name,
                                     style: const TextStyle(

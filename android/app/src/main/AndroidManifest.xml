@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Kamera: foto produk langsung (izin runtime ditangani image_picker). -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="kasirapp"
         android:name="${applicationName}"
