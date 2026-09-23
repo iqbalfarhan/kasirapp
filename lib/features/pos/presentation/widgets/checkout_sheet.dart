@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:kasirapp/core/money.dart';
 import 'package:kasirapp/core/receipt_pdf.dart';
 import 'package:kasirapp/core/result/result.dart';
+import 'package:kasirapp/features/pos/domain/usecases/calculate_total.dart';
 import 'package:kasirapp/features/pos/domain/usecases/checkout.dart';
 import 'package:kasirapp/features/pos/presentation/providers/cart_providers.dart';
+import 'package:kasirapp/features/products/presentation/providers/product_providers.dart';
 import 'package:kasirapp/features/settings/presentation/providers/auth_providers.dart';
 import 'package:kasirapp/features/transactions/presentation/providers/history_providers.dart';
 import 'package:printing/printing.dart';
@@ -17,9 +19,9 @@ void openCheckoutSheet(BuildContext context, WidgetRef ref,
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    builder: (_) => Padding(
+    builder: (sheetContext) => Padding(
       padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
       child: CheckoutSheet(onDone: onDone),
     ),
   );
@@ -40,15 +42,27 @@ class CheckoutSheet extends ConsumerStatefulWidget {
 class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
   final _payment = TextEditingController();
   bool _busy = false;
+  ProviderSubscription<CartTotals>? _totalsSub;
 
   @override
   void initState() {
     super.initState();
     _payment.text = '';
+    // Dengarkan total sekali di initState (bukan di build) agar tidak
+    // menumpuk listener setiap rebuild dan tidak fire setelah dispose.
+    _totalsSub = ref.listenManual(
+      cartTotalsProvider,
+      (_, next) {
+        if (ref.read(paymentMethodProvider) != 'tunai') {
+          ref.read(paymentInputProvider.notifier).state = next.total;
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
+    _totalsSub?.close();
     _payment.dispose();
     super.dispose();
   }
@@ -59,12 +73,16 @@ class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
   }
 
   Future<void> _pay(WidgetRef ref) async {
+    // Tangkap navigator + messenger SEBELUM await/pop: setelah sheet di-pop,
+    // State ini unmount dan `context` tidak boleh dipakai lagi.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     final cart = ref.read(cartProvider);
     final user = ref.read(authProvider);
     final settings = await ref.read(settingsProvider.future);
     if (!mounted) return;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Sesi habis, login ulang')),
       );
       return;
@@ -90,31 +108,38 @@ class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
         final change = payment - totals.total;
         ref.read(cartProvider.notifier).clear();
         ref.read(paymentInputProvider.notifier).state = 0;
-        if (!mounted) return;
-        Navigator.pop(context); // tutup sheet
+        // Stok berubah di DB → segarkan daftar Kasir (dan admin).
+        ref.invalidate(posMenuListProvider);
+        ref.invalidate(productListProvider);
+        // Tutup sheet dulu, lalu tampilkan dialog dari context navigator
+        // yang masih hidup (bukan `context` State yang sudah defunct).
+        navigator.pop();
         widget.onDone?.call();
-        _showSuccess(txId, change);
+        final dialogContext = navigator.context;
+        if (!dialogContext.mounted) return;
+        _showSuccess(dialogContext, txId, change);
       case FailureResult():
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(content: Text(result.failure.message)),
         );
     }
   }
 
-  Future<void> _shareReceipt(String txId) async {
+  Future<void> _shareReceipt(BuildContext dialogContext, String txId) async {
     try {
       final detail = await ref
           .read(transactionRepositoryProvider)
           .getDetail(txId);
-      if (!mounted) return;
+      if (!dialogContext.mounted) return;
       switch (detail) {
         case FailureResult():
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(dialogContext).showSnackBar(
             SnackBar(content: Text(detail.failure.message)),
           );
         case Success():
           final settings =
               await ref.read(settingsProvider.future);
+          if (!dialogContext.mounted) return;
           final bytes = await buildReceiptPdf(
             tx: detail.data,
             store: settings,
@@ -123,16 +148,16 @@ class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
               bytes: bytes, filename: 'struk-$txId.pdf');
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (!dialogContext.mounted) return;
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
         SnackBar(content: Text('Gagal berbagi struk: $e')),
       );
     }
   }
 
-  void _showSuccess(String txId, int change) {
+  void _showSuccess(BuildContext parentContext, String txId, int change) {
     showDialog(
-      context: context,
+      context: parentContext,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Pembayaran Berhasil'),
@@ -152,13 +177,13 @@ class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
         ),
         actions: [
           TextButton(
-            onPressed: () => _shareReceipt(txId),
+            onPressed: () => _shareReceipt(ctx, txId),
             child: const Text('Bagikan'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.go('/riwayat/$txId');
+              parentContext.go('/riwayat/$txId');
             },
             child: const Text('Detail'),
           ),
@@ -179,12 +204,8 @@ class _CheckoutSheetState extends ConsumerState<CheckoutSheet> {
     final preview = ref.watch(checkoutPreviewProvider);
     final isCash = method == 'tunai';
 
-    // Non-tunai selalu uang pas.
-    ref.listen(cartTotalsProvider, (_, next) {
-      if (ref.read(paymentMethodProvider) != 'tunai') {
-        ref.read(paymentInputProvider.notifier).state = next.total;
-      }
-    });
+    // Non-tunai selalu uang pas (listener dipasang sekali di initState
+    // via listenManual, bukan di build).
 
     final effectivePayment = isCash ? payment : totals.total;
     final change = effectivePayment - totals.total;

@@ -26,6 +26,18 @@ final productListProvider = FutureProvider<List<Product>>((ref) async {
   };
 });
 
+/// Daftar menu untuk Kasir: selalu tanpa query/kategori admin.
+/// Filter Setting/Menu (productQueryProvider/productCategoryProvider) tidak
+/// boleh bocor ke Pos — MenuGrid hanya memakai provider ini + search lokal.
+final posMenuListProvider = FutureProvider<List<Product>>((ref) async {
+  final repo = ref.watch(productRepositoryProvider);
+  final result = await GetProducts(repo)(const GetProductsParams());
+  return switch (result) {
+    Success() => result.data,
+    FailureResult() => throw result.failure.message,
+  };
+});
+
 /// Daftar kategori unik untuk chips filter.
 final productCategoriesProvider = FutureProvider<List<String>>((ref) async {
   final repo = ref.watch(productRepositoryProvider);

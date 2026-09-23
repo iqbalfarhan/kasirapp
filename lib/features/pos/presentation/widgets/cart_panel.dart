@@ -54,11 +54,10 @@ class CartPanel extends ConsumerWidget {
                 ),
           onTap: () async {
             final picked = await showCustomerPicker(context);
-            if (picked != null || context.mounted) {
-              ref
-                  .read(cartProvider.notifier)
-                  .setCustomer(picked?.id);
-            }
+            if (!context.mounted) return;
+            ref
+                .read(cartProvider.notifier)
+                .setCustomer(picked?.id);
           },
         ),
         const Divider(height: 1),
@@ -82,6 +81,7 @@ class CartPanel extends ConsumerWidget {
                           current: item.discount,
                           maxPercent: maxPct,
                         );
+                        if (!context.mounted) return;
                         if (d != null) {
                           ref
                               .read(cartProvider.notifier)
@@ -200,6 +200,7 @@ class CartPanel extends ConsumerWidget {
               current: cart.receiptDiscount,
               maxPercent: maxPct,
             );
+            if (!context.mounted) return;
             if (d != null) {
               ref.read(cartProvider.notifier).setReceiptDiscount(d);
             }

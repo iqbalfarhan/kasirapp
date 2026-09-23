@@ -125,6 +125,7 @@ class ProductsScreen extends ConsumerWidget {
     switch (result) {
       case Success():
         ref.invalidate(productListProvider);
+        ref.invalidate(posMenuListProvider);
         showOk(context, v ? 'Menu diaktifkan' : 'Menu dinonaktifkan');
       case FailureResult():
         showError(context, result.failure.message);
@@ -300,6 +301,7 @@ Future<void> showProductForm(BuildContext context, WidgetRef ref,
                 case Success():
                   Navigator.pop(ctx);
                   ref.invalidate(productListProvider);
+                  ref.invalidate(posMenuListProvider);
                   ref.invalidate(productCategoriesProvider);
                   if (context.mounted) {
                     showOk(context, 'Menu tersimpan');

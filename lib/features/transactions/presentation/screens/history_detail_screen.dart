@@ -7,6 +7,7 @@ import 'package:kasirapp/core/receipt_pdf.dart';
 import 'package:kasirapp/core/result/result.dart';
 import 'package:kasirapp/core/ui/snackbar.dart';
 import 'package:kasirapp/features/customers/presentation/providers/customer_providers.dart';
+import 'package:kasirapp/features/products/presentation/providers/product_providers.dart';
 import 'package:kasirapp/features/settings/presentation/providers/auth_providers.dart';
 import 'package:kasirapp/features/transactions/domain/entities/transaction.dart';
 import 'package:kasirapp/features/transactions/domain/repositories/transaction_repository.dart';
@@ -112,6 +113,9 @@ class _Body extends ConsumerWidget {
         case Success():
           ref.invalidate(historyListProvider);
           ref.invalidate(historyDetailProvider(tx.id));
+          // Void mengembalikan stok → segarkan daftar Kasir (dan admin).
+          ref.invalidate(posMenuListProvider);
+          ref.invalidate(productListProvider);
           showOk(context, 'Transaksi dibatalkan');
         case FailureResult():
           showError(context, result.failure.message);

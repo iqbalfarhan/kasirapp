@@ -16,7 +16,9 @@ class MenuGrid extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = ref.watch(_menuQueryProvider);
-    final list = ref.watch(productListProvider);
+    // Sengaja TIDAK memakai productListProvider: provider itu terpengaruh
+    // filter admin (Setting/Menu). Kasir selalu tampil semua + search lokal.
+    final list = ref.watch(posMenuListProvider);
 
     return Column(
       children: [
