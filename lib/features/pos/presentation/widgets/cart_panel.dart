@@ -26,9 +26,7 @@ class CartPanel extends ConsumerWidget {
     final products = ref.watch(productListProvider);
     final settings = ref.watch(settingsProvider);
     final maxPct = settings.valueOrNull?.maxDiscountPercent ?? 20;
-    final stockById = {
-      for (final p in products.valueOrNull ?? []) p.id: p,
-    };
+    final stockById = {for (final p in products.valueOrNull ?? []) p.id: p};
 
     String customerLabel() {
       final id = cart.customerId;
@@ -55,9 +53,7 @@ class CartPanel extends ConsumerWidget {
           onTap: () async {
             final picked = await showCustomerPicker(context);
             if (!context.mounted) return;
-            ref
-                .read(cartProvider.notifier)
-                .setCustomer(picked?.id);
+            ref.read(cartProvider.notifier).setCustomer(picked?.id);
           },
         ),
         const Divider(height: 1),
@@ -66,8 +62,7 @@ class CartPanel extends ConsumerWidget {
               ? const Center(child: Text('Keranjang kosong'))
               : ListView.separated(
                   itemCount: cart.items.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, i) {
                     final item = cart.items[i];
                     final stock = stockById[item.productId]?.stock;
@@ -88,83 +83,55 @@ class CartPanel extends ConsumerWidget {
                               .setItemDiscount(item.productId, d);
                         }
                       },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                      child: ListTile(
+                        title: Text(
+                          item.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        leading: IconButton.filledTonal(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => ref
+                              .read(cartProvider.notifier)
+                              .removeItem(item.productId),
+                        ),
+                        subtitle: Text(
+                          '${formatRp(item.unitPrice)} × ${item.qty}'
+                          '${item.discount.isNone ? '' : ' • disc ${item.discount.type == DiscountType.percent ? '${item.discount.value}%' : formatRp(item.discount.value)}'}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(formatRp(item.lineNet),
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                                IconButton(
-                                  icon: const Icon(Icons.close, size: 18),
-                                  visualDensity:
-                                      VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                      minWidth: 32, minHeight: 32),
-                                  onPressed: () => ref
-                                      .read(cartProvider.notifier)
-                                      .removeItem(item.productId),
-                                ),
-                              ],
+                            _stepBtn(
+                              context,
+                              icon: Icons.remove,
+                              onTap: () => ref
+                                  .read(cartProvider.notifier)
+                                  .setQty(item.productId, item.qty - 1),
                             ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '${formatRp(item.unitPrice)} × ${item.qty}'
-                                    '${item.discount.isNone ? '' : ' • disc ${item.discount.type == DiscountType.percent ? '${item.discount.value}%' : formatRp(item.discount.value)}'}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                _stepBtn(
-                                  context,
-                                  icon: Icons.remove,
-                                  onTap: () => ref
-                                      .read(cartProvider.notifier)
-                                      .setQty(
-                                          item.productId, item.qty - 1),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8),
-                                  child: Text('${item.qty}'),
-                                ),
-                                _stepBtn(
-                                  context,
-                                  icon: Icons.add,
-                                  onTap: () {
-                                    final msg = ref
-                                        .read(cartProvider.notifier)
-                                        .setQty(
-                                          item.productId,
-                                          item.qty + 1,
-                                          stockCap:
-                                              tracked ? stock : null,
-                                        );
-                                    if (msg != null &&
-                                        context.mounted) {
-                                      showError(context, msg);
-                                    }
-                                  },
-                                ),
-                              ],
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Text('${item.qty}'),
+                            ),
+                            _stepBtn(
+                              context,
+                              icon: Icons.add,
+                              onTap: () {
+                                final msg = ref
+                                    .read(cartProvider.notifier)
+                                    .setQty(
+                                      item.productId,
+                                      item.qty + 1,
+                                      stockCap: tracked ? stock : null,
+                                    );
+                                if (msg != null && context.mounted) {
+                                  showError(context, msg);
+                                }
+                              },
                             ),
                           ],
                         ),
@@ -212,19 +179,18 @@ class CartPanel extends ConsumerWidget {
             children: [
               _row('Subtotal', formatRp(totals.subtotalGross)),
               if (totals.itemDiscountTotal > 0)
-                _row('Diskon item',
-                    '- ${formatRp(totals.itemDiscountTotal)}'),
+                _row('Diskon item', '- ${formatRp(totals.itemDiscountTotal)}'),
               if (totals.receiptDiscount > 0)
-                _row('Diskon struk',
-                    '- ${formatRp(totals.receiptDiscount)}'),
-              _row(
-                  'Pajak (${cart.taxPercent}%)', formatRp(totals.tax)),
+                _row('Diskon struk', '- ${formatRp(totals.receiptDiscount)}'),
+              _row('Pajak (${cart.taxPercent}%)', formatRp(totals.tax)),
               const SizedBox(height: 4),
               _row(
                 'Total',
                 formatRp(totals.total),
                 style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -237,8 +203,11 @@ class CartPanel extends ConsumerWidget {
               child: ElevatedButton(
                 onPressed: cart.items.isEmpty
                     ? null
-                    : () => openCheckoutSheet(context, ref,
-                        onDone: onCheckoutDone),
+                    : () => openCheckoutSheet(
+                        context,
+                        ref,
+                        onDone: onCheckoutDone,
+                      ),
                 child: const Text('Bayar'),
               ),
             ),
@@ -248,19 +217,18 @@ class CartPanel extends ConsumerWidget {
     );
   }
 
-  Widget _stepBtn(BuildContext context,
-      {required IconData icon, required VoidCallback onTap}) {
+  Widget _stepBtn(
+    BuildContext context, {
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
-        child: SizedBox(
-          width: 36,
-          height: 32,
-          child: Icon(icon, size: 18),
-        ),
+        child: SizedBox(width: 36, height: 32, child: Icon(icon, size: 18)),
       ),
     );
   }

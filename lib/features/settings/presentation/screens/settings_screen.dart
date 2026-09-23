@@ -55,7 +55,7 @@ class SettingsScreen extends StatelessWidget {
           final item = _items[index];
           return ListTile(
             title: Text(item.title),
-            subtitle: Text(item.subtitle),
+            subtitle: Text(item.subtitle, overflow: TextOverflow.ellipsis),
             trailing: const Icon(Icons.chevron_right),
             minVerticalPadding: 16,
             onTap: () => context.go(item.route),

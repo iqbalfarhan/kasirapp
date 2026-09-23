@@ -59,17 +59,18 @@ class ProductImageThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final fallback = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Icon(
         Icons.fastfood,
         size: iconSize ?? size * 0.5,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        color: colorScheme.onSurfaceVariant,
       ),
     );
     if (path == null || path!.isEmpty) return fallback;
@@ -81,6 +82,53 @@ class ProductImageThumb extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => fallback,
+      ),
+    );
+  }
+}
+
+/// Foto produk square: lebar mengikuti parent, tinggi = lebar (1:1).
+/// Fallback ikon bila path kosong / file hilang.
+class ProductImageSquare extends StatelessWidget {
+  const ProductImageSquare({
+    super.key,
+    required this.path,
+    this.borderRadius = 10,
+    this.iconSize = 48,
+  });
+
+  final String? path;
+  final double borderRadius;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final fallback = Container(
+      width: double.infinity,
+      color: colorScheme.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.fastfood,
+          size: iconSize,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+    if (path == null || path!.isEmpty) {
+      return AspectRatio(aspectRatio: 1, child: fallback);
+    }
+    return AspectRatio(
+      aspectRatio: 1,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: Image.file(
+          File(path!),
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => fallback,
+        ),
       ),
     );
   }

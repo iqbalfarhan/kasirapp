@@ -20,4 +20,37 @@ void main() {
     );
     expect(find.byIcon(Icons.fastfood), findsOneWidget);
   });
+
+  testWidgets('square fallback saat path null dan rasio 1:1', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: ProductImageSquare(path: null),
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.fastfood), findsOneWidget);
+    final aspectRatio =
+        tester.widget<AspectRatio>(find.byType(AspectRatio));
+    expect(aspectRatio.aspectRatio, 1);
+  });
+
+  testWidgets('square melebar mengikuti parent', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            child: ProductImageSquare(path: ''),
+          ),
+        ),
+      ),
+    );
+    final size = tester.getSize(find.byType(ProductImageSquare));
+    expect(size.width, 200);
+    expect(size.height, 200);
+  });
 }

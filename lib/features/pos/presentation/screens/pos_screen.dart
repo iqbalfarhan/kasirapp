@@ -34,9 +34,10 @@ class PosScreen extends ConsumerWidget {
     }
 
     final totals = ref.watch(cartTotalsProvider);
-    final count =
-        ref.watch(cartProvider.select((c) => c.items.length));
+    final count = ref.watch(cartProvider.select((c) => c.items.length));
+
     return Scaffold(
+      appBar: AppBar(title: Text("Pilih menu")),
       body: const MenuGrid(),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -48,9 +49,8 @@ class PosScreen extends ConsumerWidget {
               builder: (_) => DraggableScrollableSheet(
                 expand: false,
                 initialChildSize: 0.9,
-                builder: (_, _) => CartPanel(
-                  onCheckoutDone: () => Navigator.pop(context),
-                ),
+                builder: (_, _) =>
+                    CartPanel(onCheckoutDone: () => Navigator.pop(context)),
               ),
             ),
             child: Text(
